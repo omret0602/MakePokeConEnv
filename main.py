@@ -2,11 +2,11 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from loguru import logger as _logger
 
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 
 import json
 from pathlib import Path
-
+import os
 
 CWD = Path.cwd()
 PYTHON_VERSION_JSON_FILE_NAME = 'python_ver.json'
@@ -51,7 +51,8 @@ class MakePokeConEnvironment:
 		pokecon_ver_list = self.get_pokecon_ver()
 		self.combobox_select_pokecon_ver = ttk.Combobox(frame_1)
 		self.select_pokecon_ver = tk.StringVar()
-		self.combobox_select_pokecon_ver.configure(justify='center', state='readonly', textvariable=self.select_pokecon_ver, values=pokecon_ver_list)
+		self.combobox_select_pokecon_ver.configure(
+			justify='center', state='readonly', textvariable=self.select_pokecon_ver, values=pokecon_ver_list)
 		self.combobox_select_pokecon_ver.place(anchor='nw', relheight=0.1, relwidth=0.5, relx=0.4, rely=0.35, x=0, y=0)
 
 		python_ver_list = self.get_python_ver()
@@ -67,11 +68,40 @@ class MakePokeConEnvironment:
 		self.button_install.place(anchor='nw', relheight=0.1, relwidth=0.8, relx=0.1, rely=0.85, x=0, y=0)
 		frame_1.grid(column=0, padx=6, pady=6, row=0, sticky='nsew')
 
-		self.root.protocol('WM_DELETE_WINDOW',self.closing)
 		self.mainwindow = frame_1
-		# self.combobox_select_path.bind('<<ComboboxSelected>>',self.select_folder)
-		# self.combobox_select_pokecon_ver.bind('<<ComboboxSelected>>',self.input_check)
-		# self.combobox_install_python_ver.bind('<<ComboboxSelected>>',self.input_check)
+		self.bind()
+
+	def bind(self):
+		self.root.protocol('WM_DELETE_WINDOW', self.closing)
+		self.combobox_select_path.bind('<<ComboboxSelected>>', self.select_folder)
+		self.combobox_select_pokecon_ver.bind('<<ComboboxSelected>>', self.input_check)
+		self.combobox_install_python_ver.bind('<<ComboboxSelected>>', self.input_check)
+
+	def input_check(self, event=None):
+		self.logger.info("Input Check")
+		if not all([self.install_folder_path.get(), self.select_pokecon_ver.get(), self.install_python_ver.get()]):
+			self.button_install['state'] = 'disabled'
+		else:
+			self.button_install['state'] = 'enabled'
+			self.logger.info("Input Check OK")
+
+	def select_folder(self, event=None):
+		self.button_install['state'] = 'disabled'
+		if self.install_folder_path.get() == '参照(Cドライブ直下推奨)':
+			self.install_folder_path.set('')
+			install_folder_path = Path(is_ask := filedialog.askdirectory(title='PokeConをインストールする空のフォルダーを選択してください。(日本語が含まれているフォルダー名非推奨)'))
+			# フォルダーがそもそも選択されていない場合にエラー表示
+			if not is_ask:
+				self.logger.error('Folder Not Selection Error.')
+				return messagebox.showerror('フォルダー選択エラー', 'インストール先のフォルダーが選択されませんでした。')
+
+			# 空のフォルダーが選択されていないときにエラー表示
+			if os.listdir(install_folder_path):
+				self.logger.error('Folder Selection Error.')
+				self.install_folder_path.set('')
+				return messagebox.showerror('フォルダー選択エラー', '選択されたフォルダーにはインストールできません。\nインストール先は空のフォルダーを選択してください。')
+			self.install_folder_path.set(install_folder_path)
+			self.input_check()
 
 	def get_setting_path(self):
 		setting_folder_path = CWD.joinpath('settings')
