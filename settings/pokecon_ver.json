@@ -1,0 +1,14 @@
+{
+    "Poke-Controller": {
+        "branch_name": "master",
+        "url": "https://github.com/KawaSwitch/Poke-Controller.git"
+    },
+    "Poke-Controller-Modified": {
+        "branch_name": "master",
+        "url": "https://github.com/Moi-poke/Poke-Controller-Modified.git"
+    },
+    "Poke-Controller-Modified-Extension": {
+        "branch_name": "master",
+        "url": "https://github.com/futo030/Poke-Controller-Modified-Extension.git"
+    }
+}
