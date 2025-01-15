@@ -7,21 +7,36 @@ from tkinter import messagebox, filedialog
 import json
 from pathlib import Path
 import os
+import shutil
 
-CWD = Path.cwd()
-PYTHON_VERSION_JSON_FILE_NAME = 'python_ver.json'
-POKECON_VER_JSON_FILE_NAME = 'pokecon_ver.json'
+from consts import (LOG_FILE_PATH,
+	PYTHON_VERSION_JSON_PATH,
+	POKECON_VER_JSON_FILE_PATH,
+	DEFAULT_TYPE_REQUIREMENTS_TXT_PATH,
+	DOWNLOAD_FOLDER_NAME,
+	PYTHON_TAR_FILE_NAME,
+	GIT_JSON_FILE_PATH,
+	GIT_FILE_NAME,
+	INSTALL_PYTHON_FOLDER_NAME,
+	POKECON_TYPE_NORMAL,
+	POKECON_TYPE_MODIFIED,
+	POKECON_TYPE_MODIFIED_EXTENSION,
+	POKECON_TYPE_LIST,
+	POKECON_TYPE_NAME_NORMAL,
+	POKECON_TYPE_NAME_MODIFIED,
+	POKECON_TYPE_NAME_MODIFIED_EXTENSION,
+	POKECON_TYPE_NAME_LIST,
+	)
+import requests
+import tarfile
+import subprocess
+
 
 class MakePokeConEnvironment:
 	def __init__(self, master=None):
 		# logger setting
-		log_folder_path = CWD.joinpath('log')
-		log_file_path = log_folder_path.joinpath('install_log.log')
-		_logger.add(log_file_path, rotation='1 day', level='INFO')
+		_logger.add(LOG_FILE_PATH, rotation='1 day', level='INFO')
 		self.logger = _logger
-
-		# Load Setting
-		self.get_setting_path()
 
 		# window setting
 		self.root = master
@@ -43,28 +58,27 @@ class MakePokeConEnvironment:
 		label_5.place(anchor='nw', relheight=0.1, relwidth=0.3, relx=0.1, rely=0.5, x=0, y=0)
 
 		self.combobox_select_path = ttk.Combobox(frame_1)
-		self.install_folder_path = tk.StringVar()
+		self.install_folder_path_var = tk.StringVar()
 		self.combobox_select_path.configure(
-			justify='center', state='readonly', textvariable=self.install_folder_path, values=['参照(Cドライブ直下推奨)'])
+			justify='center', state='readonly', textvariable=self.install_folder_path_var, values=['参照(Cドライブ直下推奨)'])
 		self.combobox_select_path.place(anchor='nw', relheight=0.1, relwidth=0.5, relx=0.4, rely=0.2, x=0, y=0)
 
-		pokecon_ver_list = self.get_pokecon_ver()
+		# pokecon_ver_list = 
 		self.combobox_select_pokecon_ver = ttk.Combobox(frame_1)
 		self.select_pokecon_ver = tk.StringVar()
 		self.combobox_select_pokecon_ver.configure(
-			justify='center', state='readonly', textvariable=self.select_pokecon_ver, values=pokecon_ver_list)
+			justify='center', state='readonly', textvariable=self.select_pokecon_ver, values=self.get_pokecon_ver())
 		self.combobox_select_pokecon_ver.place(anchor='nw', relheight=0.1, relwidth=0.5, relx=0.4, rely=0.35, x=0, y=0)
 
-		python_ver_list = self.get_python_ver()
 		self.combobox_install_python_ver = ttk.Combobox(frame_1)
 		self.install_python_ver = tk.StringVar()
 		self.combobox_install_python_ver.configure(
-			justify='center', state='readonly', textvariable=self.install_python_ver, values=python_ver_list)
+			justify='center', state='readonly', textvariable=self.install_python_ver, values=self.get_python_ver())
 		self.combobox_install_python_ver.option_add('*TCombobox*Listbox.Font', ('{游ゴシック} 12 {}'))
 		self.combobox_install_python_ver.place(anchor='nw', relheight=0.1, relwidth=0.5, relx=0.4, rely=0.5, x=0, y=0)
 
 		self.button_install = ttk.Button(frame_1)
-		self.button_install.configure(text='インストール開始',state='disabled')
+		self.button_install.configure(text='開始', state='disabled', command=self.main)
 		self.button_install.place(anchor='nw', relheight=0.1, relwidth=0.8, relx=0.1, rely=0.85, x=0, y=0)
 		frame_1.grid(column=0, padx=6, pady=6, row=0, sticky='nsew')
 
@@ -77,9 +91,171 @@ class MakePokeConEnvironment:
 		self.combobox_select_pokecon_ver.bind('<<ComboboxSelected>>', self.input_check)
 		self.combobox_install_python_ver.bind('<<ComboboxSelected>>', self.input_check)
 
+	def main(self):
+		self.button_install['state'] = 'disabled'
+		if not messagebox.askokcancel('インストール確認', f'{self.install_folder_path_var.get()}\n{self.select_pokecon_ver.get()}\n{self.install_python_ver.get()}\n上記内容でインストールを開始します。よろしいですか?'):
+			self.button_install['state'] = 'enable'
+			return 
+		self.load_path_settings()
+		if not self.get_python():
+			self.logger.error('Python download ERROR')
+			return
+		# Git download install
+		if not self.get_git():
+			self.logger.error('Exception Git.')
+			return
+		# Clone poke-con
+		if not self.get_pokecon():
+			self.logger.error('Clone ERROR.')
+			return
+
+		if not self.install_library():
+			self.logger.error('Install library ERROR.')
+			return
+
+	def load_path_settings(self):
+		# install先フォルダーpath
+		self.install_folder_path = Path(self.install_folder_path_var.get())
+		if self.install_folder_path.exists():
+			self.install_folder_path.mkdir(parents=True, exist_ok=True)
+
+		# downloadフォルダーpath
+		self.download_folder_path = self.install_folder_path.joinpath(DOWNLOAD_FOLDER_NAME)
+		self.download_folder_path.mkdir(parents=True)
+
+	def get_python(self):
+		self.logger.info('Start download Python.')
+		try:
+			response = requests.get(json.load(open(PYTHON_VERSION_JSON_PATH, mode='r'))[self.install_python_ver.get()]['url'])
+			if response.status_code == 200:
+				python_builds_path = self.download_folder_path.joinpath(PYTHON_TAR_FILE_NAME)
+				with open(python_builds_path, mode='wb') as file:
+					for chunk in response.iter_content(chunk_size=4096):
+						if chunk:
+							file.write(chunk)
+				with tarfile.open(python_builds_path, 'r:gz') as tar:
+					tar.extractall(path=self.install_folder_path)
+				self.logger.info('Python download sucessfully.')
+			return response.status_code == 200
+		except Exception as e:
+			self.logger.exception(e)
+			return False
+
+	def get_git(self):
+		try:
+			if self.is_install_check_git():
+				self.logger.info('Skip this step because Git is already installed.')
+				return True
+			self.logger.info('Start download Git.')
+			response = requests.get(json.load(open(GIT_JSON_FILE_PATH, mode='r'))['url'])
+			git_file_path = self.download_folder_path.joinpath(GIT_FILE_NAME)
+			if response.status_code == 200:
+				with open(git_file_path, 'wb') as file:
+					for chunk in response.iter_content(chunk_size=4096):
+						if chunk:
+							file.write(chunk)
+				self.logger.info('Finish download Git.')
+				self.logger.info('Start install Git.')
+				install_git_args = [
+					str(git_file_path),
+					"/VERYSILENT",
+					"/NORESTART",
+					"/NOCANCEL", "/SP-",
+					"/CLOSEAPPLICATIONS",
+					"/RESTARTAPPLICATIONS",
+					'/COMPONENTS="icons,ext\\reg\shellhere,assoc,assoc_sh"',
+				]
+				subprocess.run(install_git_args, shell=True)
+				self.logger.info('Finish install Git.')
+			return response.status_code == 200
+		except Exception as e:
+			self.logger.exception(e)
+			return False
+
+	def get_pokecon(self):
+		self.logger.info('Start clone PokeCon.')
+		try:
+			if not self.is_install_check_git():
+				self.logger.warning('WARNING: Git is not installed. or PATH does not through. Please restart computer.')
+				messagebox.showwarning('Gitインストール警告', 'Gitがインストールされていない \nもしくは\nPATHが通っていないため、PCを再起動して最初から実行してください。')
+				return False
+			json_data = json.load(open(POKECON_VER_JSON_FILE_PATH, mode='r'))[self.select_pokecon_ver.get()]
+			git_url = json_data['url']
+			git_branch_name = json_data['branch_name']
+			git_clone_args = ['git', 'clone', '--recursive', '-b', git_branch_name, git_url]
+			subprocess.run(git_clone_args, cwd=self.install_folder_path, shell=True)
+			self.logger.info('Finish clone PokeCon')
+			return True
+		except Exception as e:
+			self.logger.exception(e)
+			return False
+
+	def install_library(self):
+		self.logger.info('Start install Python library.')
+		try:
+			python_folder_path = self.install_folder_path.joinpath(INSTALL_PYTHON_FOLDER_NAME)
+			pokecon_type = self.get_pokecon_type()
+			pokecon_type_name = self.get_pokecon_type_name()
+			requirements_txt_path = self.install_folder_path.joinpath(pokecon_type_name, 'requirements.txt')
+			# pip upgrade
+			pip_upgrade_args = ['python.exe', '-m', 'pip', 'install', '--upgrade', 'pip']
+			subprocess.run(pip_upgrade_args, cwd=python_folder_path, shell=True)
+			# setuptools upgrade
+			setuptools_upgrade_args = ['python.exe', '-m', 'pip', 'install', '--upgrade', 'setuptools']
+			subprocess.run(setuptools_upgrade_args, cwd=python_folder_path, shell=True)
+
+			# 本家Poke-conをインストールする場合
+			if pokecon_type == POKECON_TYPE_NORMAL and pokecon_type_name == POKECON_TYPE_NAME_NORMAL:
+				normal_args = ['python.exe', '-m', 'pip', 'install', '-r', f'{DEFAULT_TYPE_REQUIREMENTS_TXT_PATH}']
+				subprocess.run(normal_args, cwd=python_folder_path, shell=True)
+
+			# Poke-con-modifiedをインストールする場合
+			elif pokecon_type == POKECON_TYPE_MODIFIED and pokecon_type_name == POKECON_TYPE_NAME_MODIFIED:
+				modified_args = ['python.exe', '-m', 'pip', 'install', '-r', f'{requirements_txt_path}']
+				subprocess.run(modified_args, cwd=python_folder_path, shell=True)
+
+			# Poke-con-modified-extensionをインストールする場合
+			elif pokecon_type == POKECON_TYPE_MODIFIED_EXTENSION and pokecon_type_name == POKECON_TYPE_NAME_MODIFIED_EXTENSION:
+				extension_args = ['python.exe', '-m', 'pip', 'install', '-r', f'{requirements_txt_path}']
+				subprocess.run(extension_args, cwd=python_folder_path, shell=True)
+
+			# JSONの項目が正しく入力されていない場合はエラーを表示。
+			else:
+				self.logger.error('Invalid Poke-Con type.')
+				messagebox.showerror('Poke-Conの種類指定が無効なため、ライブラリのインストールに失敗しました。')
+				return False
+
+			self.logger.info('Finish install Python library.')
+			return True
+
+		except Exception as e:
+			self.logger.exception(e)
+			return False
+
+	def get_pokecon_type(self):
+		pokecon_type = json.load(open(POKECON_VER_JSON_FILE_PATH, mode='r'))[self.select_pokecon_ver.get()]['type']
+		if pokecon_type not in POKECON_TYPE_LIST:
+			return 'invalid_type'
+		return pokecon_type
+
+	def get_pokecon_type_name(self):
+		pokecon_type = json.load(open(POKECON_VER_JSON_FILE_PATH, mode='r'))[self.select_pokecon_ver.get()]['name']
+		if pokecon_type not in POKECON_TYPE_NAME_LIST:
+			return 'invalid_type_name'
+		return pokecon_type
+
+	def is_install_check_git(self):
+		if shutil.which("git"):
+			try:
+				subprocess.run(["git", "--version"])
+				return True
+			except subprocess.CalledProcessError:
+				pass
+		return False
+
 	def input_check(self, event=None):
 		self.logger.info("Input Check")
-		if not all([self.install_folder_path.get(), self.select_pokecon_ver.get(), self.install_python_ver.get()]):
+		if not all([self.install_folder_path_var.get(), self.select_pokecon_ver.get(), self.install_python_ver.get()]):
 			self.button_install['state'] = 'disabled'
 		else:
 			self.button_install['state'] = 'enabled'
@@ -87,8 +263,8 @@ class MakePokeConEnvironment:
 
 	def select_folder(self, event=None):
 		self.button_install['state'] = 'disabled'
-		if self.install_folder_path.get() == '参照(Cドライブ直下推奨)':
-			self.install_folder_path.set('')
+		if self.install_folder_path_var.get() == '参照(Cドライブ直下推奨)':
+			self.install_folder_path_var.set('')
 			install_folder_path = Path(is_ask := filedialog.askdirectory(title='PokeConをインストールする空のフォルダーを選択してください。(日本語が含まれているフォルダー名非推奨)'))
 			# フォルダーがそもそも選択されていない場合にエラー表示
 			if not is_ask:
@@ -98,23 +274,18 @@ class MakePokeConEnvironment:
 			# 空のフォルダーが選択されていないときにエラー表示
 			if os.listdir(install_folder_path):
 				self.logger.error('Folder Selection Error.')
-				self.install_folder_path.set('')
+				self.install_folder_path_var.set('')
 				return messagebox.showerror('フォルダー選択エラー', '選択されたフォルダーにはインストールできません。\nインストール先は空のフォルダーを選択してください。')
-			self.install_folder_path.set(install_folder_path)
+			self.install_folder_path_var.set(install_folder_path)
 			self.input_check()
-
-	def get_setting_path(self):
-		setting_folder_path = CWD.joinpath('settings')
-		self.pokecon_ver_json_file_path = setting_folder_path.joinpath(POKECON_VER_JSON_FILE_NAME)
-		self.python_ver_json_file_path = setting_folder_path.joinpath(PYTHON_VERSION_JSON_FILE_NAME)
 
 	def get_pokecon_ver(self):
 		self.logger.info('Get Pokecon Ver')
-		return [key for key in json.load(open(self.pokecon_ver_json_file_path)).keys()]
+		return [key for key in json.load(open(POKECON_VER_JSON_FILE_PATH, mode='r')).keys()]
 
 	def get_python_ver(self):
 		self.logger.info('Get Python Ver')
-		return [key for key in json.load(open(self.python_ver_json_file_path)).keys()]
+		return [key for key in json.load(open(PYTHON_VERSION_JSON_PATH, mode='r')).keys()]
 
 	def closing(self):
 		self.logger.info('Confirmation at finish.')
