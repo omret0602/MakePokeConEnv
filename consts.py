@@ -9,7 +9,8 @@ LOG_FILE_PATH = LOG_FOLDER_PATH.joinpath('install_log.log')
 PYTHON_VERSION_JSON_PATH = SETTINGS_FOLDER_PATH.joinpath('python_ver.json')
 POKECON_VER_JSON_FILE_PATH = SETTINGS_FOLDER_PATH.joinpath('pokecon_ver.json')
 GIT_JSON_FILE_PATH = SETTINGS_FOLDER_PATH.joinpath('git_url.json')
-DEFAULT_TYPE_REQUIREMENTS_TXT_PATH = SETTINGS_FOLDER_PATH.joinpath('default_type_requirements.txt')
+DEFAULT_TYPE_REQUIREMENTS_TXT_PATH = SETTINGS_FOLDER_PATH.joinpath('normal_type_requirements.txt')
+SERIALCONTROLLER_FOLDER_NAME = 'SerialController'
 
 
 DOWNLOAD_FOLDER_NAME = 'download'
@@ -17,6 +18,12 @@ PYTHON_TAR_FILE_NAME = 'PythonStandAloneBuilds.tar.gz'
 GIT_FILE_NAME = 'git_for_windows.exe'
 
 INSTALL_PYTHON_FOLDER_NAME = 'python'
+PYTHON_EXE_NAME = 'python.exe'
+
+WINDOW_PY_NAME = 'Window.py'
+EXTENSION_UPDATECHECKER_PY_NAME = 'PokeConUpdateChecker.py'
+START_BAT_NAME = 'start.bat'
+LIBRARY_INSTALL_BAT = 'library_install.bat'
 
 
 POKECON_TYPE_NORMAL = 'normal'
