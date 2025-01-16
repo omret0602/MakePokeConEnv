@@ -1,42 +1,41 @@
-import tkinter as tk
-import tkinter.ttk as ttk
-from loguru import logger as _logger
-
-from tkinter import messagebox, filedialog
-
 import json
-from pathlib import Path
 import os
 import shutil
+import subprocess
+import tarfile
+import tkinter as tk
+import tkinter.ttk as ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox
+
+import requests
+from loguru import logger as _logger
 
 from consts import (
-	LOG_FILE_PATH,
-	PYTHON_VERSION_JSON_PATH,
-	POKECON_VER_JSON_FILE_PATH,
 	DEFAULT_TYPE_REQUIREMENTS_TXT_PATH,
 	DOWNLOAD_FOLDER_NAME,
-	PYTHON_TAR_FILE_NAME,
-	GIT_JSON_FILE_PATH,
+	EXTENSION_UPDATECHECKER_PY_NAME,
 	GIT_FILE_NAME,
+	GIT_JSON_FILE_PATH,
 	INSTALL_PYTHON_FOLDER_NAME,
-	PYTHON_EXE_NAME,
-	SERIALCONTROLLER_FOLDER_NAME,
-	POKECON_TYPE_NORMAL,
+	LIBRARY_INSTALL_BAT,
+	LOG_FILE_PATH,
+	POKECON_TYPE_LIST,
 	POKECON_TYPE_MODIFIED,
 	POKECON_TYPE_MODIFIED_EXTENSION,
-	POKECON_TYPE_LIST,
-	POKECON_TYPE_NAME_NORMAL,
+	POKECON_TYPE_NAME_LIST,
 	POKECON_TYPE_NAME_MODIFIED,
 	POKECON_TYPE_NAME_MODIFIED_EXTENSION,
-	POKECON_TYPE_NAME_LIST,
+	POKECON_TYPE_NAME_NORMAL,
+	POKECON_TYPE_NORMAL,
+	POKECON_VER_JSON_FILE_PATH,
+	PYTHON_EXE_NAME,
+	PYTHON_TAR_FILE_NAME,
+	PYTHON_VERSION_JSON_PATH,
+	SERIALCONTROLLER_FOLDER_NAME,
 	START_BAT_NAME,
-	LIBRARY_INSTALL_BAT,
-	EXTENSION_UPDATECHECKER_PY_NAME,
-	)
-from utils import start_bat_default_txt, start_bat_ext_txt, library_install_bat_txt
-import requests
-import tarfile
-import subprocess
+)
+from utils import library_install_bat_txt, start_bat_default_txt, start_bat_ext_txt
 
 
 class MakePokeConEnvironment:
@@ -101,7 +100,7 @@ class MakePokeConEnvironment:
 	def main(self):
 		self.button_install['state'] = 'disabled'
 
-		if not messagebox.askokcancel('インストール確認', f'{self.install_folder_path_var.get()}\n{self.select_pokecon_ver.get()}\n{self.install_python_ver.get()}\n上記内容でインストールを開始します。よろしいですか?'):
+		if not messagebox.askokcancel('インストール確認', f'{self.install_folder_path_var.get()}\n{self.select_pokecon_ver.get()}\n{self.install_python_ver.get()}\n上記内容でインストールを開始します。よろしいですか? \nまた、インストール中は応答なしになります。'):
 			self.button_install['state'] = 'enable'
 			return 
 
