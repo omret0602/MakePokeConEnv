@@ -9,7 +9,8 @@ from pathlib import Path
 import os
 import shutil
 
-from consts import (LOG_FILE_PATH,
+from consts import (
+	LOG_FILE_PATH,
 	PYTHON_VERSION_JSON_PATH,
 	POKECON_VER_JSON_FILE_PATH,
 	DEFAULT_TYPE_REQUIREMENTS_TXT_PATH,
@@ -18,6 +19,8 @@ from consts import (LOG_FILE_PATH,
 	GIT_JSON_FILE_PATH,
 	GIT_FILE_NAME,
 	INSTALL_PYTHON_FOLDER_NAME,
+	PYTHON_EXE_NAME,
+	SERIALCONTROLLER_FOLDER_NAME,
 	POKECON_TYPE_NORMAL,
 	POKECON_TYPE_MODIFIED,
 	POKECON_TYPE_MODIFIED_EXTENSION,
@@ -26,7 +29,11 @@ from consts import (LOG_FILE_PATH,
 	POKECON_TYPE_NAME_MODIFIED,
 	POKECON_TYPE_NAME_MODIFIED_EXTENSION,
 	POKECON_TYPE_NAME_LIST,
+	START_BAT_NAME,
+	LIBRARY_INSTALL_BAT,
+	EXTENSION_UPDATECHECKER_PY_NAME,
 	)
+from utils import start_bat_default_txt, start_bat_ext_txt, library_install_bat_txt
 import requests
 import tarfile
 import subprocess
@@ -93,25 +100,49 @@ class MakePokeConEnvironment:
 
 	def main(self):
 		self.button_install['state'] = 'disabled'
+
 		if not messagebox.askokcancel('インストール確認', f'{self.install_folder_path_var.get()}\n{self.select_pokecon_ver.get()}\n{self.install_python_ver.get()}\n上記内容でインストールを開始します。よろしいですか?'):
 			self.button_install['state'] = 'enable'
 			return 
+
 		self.load_path_settings()
 		if not self.get_python():
 			self.logger.error('Python download ERROR')
-			return
+			self.button_install['state'] = 'enable'
+			return messagebox.showerror('error', 'PythonのDL中にエラーが発生しました。')
+
 		# Git download install
 		if not self.get_git():
 			self.logger.error('Exception Git.')
-			return
+			self.button_install['state'] = 'enable'
+			return messagebox.showerror('error', 'GitのDL.Install中にエラーが発生しました。')
+
 		# Clone poke-con
 		if not self.get_pokecon():
 			self.logger.error('Clone ERROR.')
-			return
+			self.button_install['state'] = 'enable'
+			return messagebox.showerror('error', 'Poke-ConのClone中にエラーが発生しました。')
 
+		# Install Python library.
 		if not self.install_library():
 			self.logger.error('Install library ERROR.')
-			return
+			self.button_install['state'] = 'enable'
+			return messagebox.showerror('error', 'ライブラリをインストール中にエラーが発生しました。')
+
+		# Create Start bat.
+		if not self.create_start_bat():
+			self.logger.error('Does not create start.bat.')
+			self.button_install['state'] = 'enable'
+			return messagebox.showerror('error', 'start.batの作成中にエラーが発生しました。')
+		
+		if not self.create_library_install_bat():
+			self.logger.error('Does not create library_install.bat.')
+			self.button_install['state'] = 'enable'
+			return messagebox.showerror('error', 'library_install.batの作成中にエラーが発生しました。')
+
+		self.logger.success('Sucessfully make Poke-Con environment.')
+		self.button_install['state'] = 'enable'
+		messagebox.showinfo('環境構築完了', '環境構築が完了しました。')
 
 	def load_path_settings(self):
 		# install先フォルダーpath
@@ -197,9 +228,11 @@ class MakePokeConEnvironment:
 			pokecon_type = self.get_pokecon_type()
 			pokecon_type_name = self.get_pokecon_type_name()
 			requirements_txt_path = self.install_folder_path.joinpath(pokecon_type_name, 'requirements.txt')
+
 			# pip upgrade
 			pip_upgrade_args = ['python.exe', '-m', 'pip', 'install', '--upgrade', 'pip']
 			subprocess.run(pip_upgrade_args, cwd=python_folder_path, shell=True)
+
 			# setuptools upgrade
 			setuptools_upgrade_args = ['python.exe', '-m', 'pip', 'install', '--upgrade', 'setuptools']
 			subprocess.run(setuptools_upgrade_args, cwd=python_folder_path, shell=True)
@@ -232,17 +265,58 @@ class MakePokeConEnvironment:
 			self.logger.exception(e)
 			return False
 
-	def get_pokecon_type(self):
-		pokecon_type = json.load(open(POKECON_VER_JSON_FILE_PATH, mode='r'))[self.select_pokecon_ver.get()]['type']
-		if pokecon_type not in POKECON_TYPE_LIST:
-			return 'invalid_type'
-		return pokecon_type
+	def create_start_bat(self):
+		try:
+			pokecon_type = self.get_pokecon_type()
+			pokecon_type_name = self.get_pokecon_type_name()
+			serialcontroller_path = self.install_folder_path.joinpath(pokecon_type_name, SERIALCONTROLLER_FOLDER_NAME)
+			python_exe_path = self.install_folder_path.joinpath(INSTALL_PYTHON_FOLDER_NAME, PYTHON_EXE_NAME)
 
-	def get_pokecon_type_name(self):
-		pokecon_type = json.load(open(POKECON_VER_JSON_FILE_PATH, mode='r'))[self.select_pokecon_ver.get()]['name']
-		if pokecon_type not in POKECON_TYPE_NAME_LIST:
-			return 'invalid_type_name'
-		return pokecon_type
+			# 本家Poke-conをインストールする場合
+			if pokecon_type == POKECON_TYPE_NORMAL and pokecon_type_name == POKECON_TYPE_NAME_NORMAL:
+				txt = start_bat_default_txt(python_exe_path, serialcontroller_path)
+
+			# Poke-con-modifiedをインストールする場合
+			elif pokecon_type == POKECON_TYPE_MODIFIED and pokecon_type_name == POKECON_TYPE_NAME_MODIFIED:
+				txt = start_bat_default_txt(python_exe_path, serialcontroller_path)
+
+			# Poke-con-modified-extensionをインストールする場合
+			elif pokecon_type == POKECON_TYPE_MODIFIED_EXTENSION and pokecon_type_name == POKECON_TYPE_NAME_MODIFIED_EXTENSION:
+				extension_folder_path = self.install_folder_path.joinpath(pokecon_type_name)
+				updatechecker_path = serialcontroller_path.joinpath(EXTENSION_UPDATECHECKER_PY_NAME)
+				txt = start_bat_ext_txt(
+					python_exe_path,
+					serialcontroller_path,
+					extension_folder_path,
+					updatechecker_path,
+				)
+
+			else:
+				self.logger.error('Invalid Poke-Con type. Does not create start.bat.')
+				messagebox.showerror('Poke-Conの種類指定が無効なため、batファイルの作成に失敗しました。')
+				return False
+
+			with open(self.install_folder_path.joinpath(START_BAT_NAME), 'w', encoding='utf-8') as file:
+				file.write(txt)
+			return True
+
+		except Exception as e:
+			self.logger.exception(e)
+			return False
+
+	def create_library_install_bat(self):
+		try:
+			python_exe_path = self.install_folder_path.joinpath(INSTALL_PYTHON_FOLDER_NAME, PYTHON_EXE_NAME)
+			library_install_bat_path = self.install_folder_path.joinpath(LIBRARY_INSTALL_BAT)
+			txt = library_install_bat_txt(python_exe_path)
+
+			with open(library_install_bat_path, 'w', encoding='cp932') as file:
+				file.write(txt)
+
+		except Exception as e:
+			self.logger.exception(e)
+			return False
+		return True
 
 	def is_install_check_git(self):
 		if shutil.which("git"):
@@ -278,6 +352,18 @@ class MakePokeConEnvironment:
 				return messagebox.showerror('フォルダー選択エラー', '選択されたフォルダーにはインストールできません。\nインストール先は空のフォルダーを選択してください。')
 			self.install_folder_path_var.set(install_folder_path)
 			self.input_check()
+
+	def get_pokecon_type(self):
+		pokecon_type = json.load(open(POKECON_VER_JSON_FILE_PATH, mode='r'))[self.select_pokecon_ver.get()]['type']
+		if pokecon_type not in POKECON_TYPE_LIST:
+			return 'invalid_type'
+		return pokecon_type
+
+	def get_pokecon_type_name(self):
+		pokecon_type = json.load(open(POKECON_VER_JSON_FILE_PATH, mode='r'))[self.select_pokecon_ver.get()]['name']
+		if pokecon_type not in POKECON_TYPE_NAME_LIST:
+			return 'invalid_type_name'
+		return pokecon_type
 
 	def get_pokecon_ver(self):
 		self.logger.info('Get Pokecon Ver')
